@@ -16,14 +16,16 @@ from app.services.embeddings import _client
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ITERATIONS = 5
+MAX_TOOL_ITERATIONS = 3
 
 SYSTEM_INSTRUCTION = (
-    "You are DevBrain's research agent. Use the provided tools to gather evidence "
-    "from the user's documents before answering. Prefer search_documents to ground "
-    "answers, and cite sources inline with [n] where n matches a search result index. "
-    "Use explain_architecture for questions about how a codebase is structured. "
-    "Be concise and only assert what the tools support."
+    "You are DevBrain's research agent. Answer efficiently with as few tool calls as "
+    "possible — ideally ONE. For a normal question, call search_documents once with a "
+    "focused query, then answer directly; do NOT call list_documents unless the user "
+    "explicitly asks what documents/repos exist. Use compare_documents only for explicit "
+    "comparisons, and explain_architecture only for codebase-structure questions. Cite "
+    "sources inline with [n] matching the search result index. Once you have enough "
+    "evidence, STOP calling tools and answer. Be concise and only assert what the tools support."
 )
 
 
@@ -42,11 +44,6 @@ def _tool_declarations() -> types.Tool:
                     },
                     required=["query"],
                 ),
-            ),
-            types.FunctionDeclaration(
-                name="list_documents",
-                description="List the documents and repos available in this workspace.",
-                parameters=types.Schema(type=types.Type.OBJECT, properties={}),
             ),
             types.FunctionDeclaration(
                 name="explain_architecture",
@@ -159,7 +156,7 @@ def agent_events(workspace_id: str, user_id: str, query: str, history: list[dict
 
     for _ in range(MAX_TOOL_ITERATIONS):
         resp = _client().models.generate_content(
-            model=settings.chat_model, contents=contents, config=config
+            model=settings.agent_model, contents=contents, config=config
         )
         candidate = resp.candidates[0]
         parts = candidate.content.parts or []
@@ -186,7 +183,7 @@ def agent_events(workspace_id: str, user_id: str, query: str, history: list[dict
 
     # Ran out of tool iterations — force a final answer with what we have.
     resp = _client().models.generate_content(
-        model=settings.chat_model, contents=contents, config=config
+        model=settings.agent_model, contents=contents, config=config
     )
     yield {"type": "final", "answer": resp.text or "",
            "citations": citations, "tool_trace": tool_trace}

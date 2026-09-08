@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     embedding_model: str = "gemini-embedding-001"
     chat_model: str = "gemini-3.6-flash"
+    # Lighter/faster model with higher free-tier limits for the multi-call agent loop.
+    agent_model: str = "gemini-flash-lite-latest"
     embedding_dim: int = 768  # request 768-dim output to match the pgvector column
 
     # Supabase / Postgres
