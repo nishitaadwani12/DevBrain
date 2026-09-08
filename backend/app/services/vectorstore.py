@@ -236,11 +236,11 @@ def search_chunks(workspace_id: str, query_embedding: list[float], top_k: int = 
             """
             select c.id, c.document_id, d.filename, c.content, c.page, c.chunk_index,
                    c.source_path, c.start_line, c.end_line,
-                   c.embedding <=> %s as distance
+                   c.embedding <=> %s::vector as distance
               from chunks c
               join documents d on d.id = c.document_id
              where c.workspace_id = %s
-             order by c.embedding <=> %s
+             order by c.embedding <=> %s::vector
              limit %s
             """,
             (query_embedding, workspace_id, query_embedding, top_k),
