@@ -37,3 +37,8 @@ class SearchRequest(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: list[ChunkHit]
+
+
+class ChatRequest(BaseModel):
+    query: str
+    top_k: int = 5
