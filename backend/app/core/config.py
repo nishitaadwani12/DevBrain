@@ -1,0 +1,32 @@
+"""Application settings loaded from environment / .env."""
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Google Gemini
+    gemini_api_key: str = ""
+    embedding_model: str = "text-embedding-004"
+    chat_model: str = "gemini-2.0-flash"
+    embedding_dim: int = 768  # text-embedding-004 output dimension
+
+    # Supabase / Postgres
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_anon_key: str = ""
+    database_url: str = ""
+
+    # App
+    cors_origins: str = "http://localhost:5173"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
