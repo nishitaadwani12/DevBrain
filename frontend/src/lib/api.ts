@@ -3,10 +3,15 @@ import { getAccessToken } from './supabase'
 import type {
   AgentResponse,
   Citation,
+  Confidence,
   ConversationSummary,
   DocumentSummary,
+  FollowupsResponse,
   MessageOut,
   RepoGraph,
+  RepoOverview,
+  ToolCall,
+  ToolResult,
   UploadResponse,
   WorkspaceSummary,
 } from './types'
@@ -91,6 +96,25 @@ export async function getRepoGraph(documentId: string): Promise<RepoGraph> {
   return data
 }
 
+export async function getRepoOverview(documentId: string): Promise<RepoOverview> {
+  const { data } = await api.get<RepoOverview>(`/repos/${documentId}/overview`)
+  return data
+}
+
+// ---------- Follow-up suggestions ----------
+
+export async function getFollowups(
+  workspaceId: string,
+  question: string,
+  answer: string,
+): Promise<FollowupsResponse> {
+  const { data } = await api.post<FollowupsResponse>(
+    `/workspaces/${workspaceId}/followups`,
+    { question, answer },
+  )
+  return data
+}
+
 // ---------- Conversations & messages ----------
 
 export async function listConversations(
@@ -137,21 +161,24 @@ export interface ChatRequest {
 
 export interface StreamChatHandlers {
   onConversation?: (data: { conversation_id: string; title: string }) => void
-  onSources?: (citations: Citation[]) => void
+  onSources?: (citations: Citation[], confidence?: Confidence) => void
   onToken?: (text: string) => void
   onDone?: () => void
   onError?: (message: string) => void
 }
 
+type SSEDispatch = (eventName: string, payload: unknown) => void
+
 /**
- * Streams a chat response using the SSE-over-fetch pattern. EventSource only
- * supports GET, so we read the response body as a stream and parse the
- * `event:` / `data:` lines ourselves.
+ * Shared SSE-over-fetch reader. EventSource only supports GET, so we POST and
+ * read the response body as a stream, parsing `event:` / `data:` lines and
+ * invoking `dispatch(eventName, payload)` for each complete event.
  */
-export async function streamChat(
-  workspaceId: string,
-  body: ChatRequest,
-  handlers: StreamChatHandlers,
+async function consumeSSE(
+  path: string,
+  body: unknown,
+  onError: (message: string) => void,
+  dispatch: SSEDispatch,
   signal?: AbortSignal,
 ): Promise<void> {
   const token = await getAccessToken()
@@ -161,7 +188,7 @@ export async function streamChat(
   }
   if (token) headers.Authorization = `Bearer ${token}`
 
-  const res = await fetch(`${API_URL}/workspaces/${workspaceId}/chat`, {
+  const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -170,7 +197,7 @@ export async function streamChat(
 
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => '')
-    handlers.onError?.(text || `Request failed with status ${res.status}`)
+    onError(text || `Request failed with status ${res.status}`)
     return
   }
 
@@ -178,7 +205,7 @@ export async function streamChat(
   const decoder = new TextDecoder()
   let buffer = ''
 
-  const dispatch = (rawEvent: string) => {
+  const parseAndDispatch = (rawEvent: string) => {
     const lines = rawEvent.split('\n')
     let eventName = 'message'
     const dataLines: string[] = []
@@ -198,28 +225,7 @@ export async function streamChat(
         payload = { text: dataStr }
       }
     }
-
-    switch (eventName) {
-      case 'conversation':
-        handlers.onConversation?.(
-          payload as { conversation_id: string; title: string },
-        )
-        break
-      case 'sources':
-        handlers.onSources?.((payload as { citations: Citation[] }).citations ?? [])
-        break
-      case 'token':
-        handlers.onToken?.((payload as { text: string }).text ?? '')
-        break
-      case 'done':
-        handlers.onDone?.()
-        break
-      case 'error':
-        handlers.onError?.((payload as { message: string }).message ?? 'Unknown error')
-        break
-      default:
-        break
-    }
+    dispatch(eventName, payload)
   }
 
   // eslint-disable-next-line no-constant-condition
@@ -233,9 +239,122 @@ export async function streamChat(
     while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
       const rawEvent = buffer.slice(0, sepIndex)
       buffer = buffer.slice(sepIndex + 2)
-      if (rawEvent.trim()) dispatch(rawEvent)
+      if (rawEvent.trim()) parseAndDispatch(rawEvent)
     }
   }
 
-  if (buffer.trim()) dispatch(buffer)
+  if (buffer.trim()) parseAndDispatch(buffer)
+}
+
+/**
+ * Streams a chat response (token-by-token) from POST /workspaces/{id}/chat.
+ */
+export async function streamChat(
+  workspaceId: string,
+  body: ChatRequest,
+  handlers: StreamChatHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  await consumeSSE(
+    `/workspaces/${workspaceId}/chat`,
+    body,
+    (msg) => handlers.onError?.(msg),
+    (eventName, payload) => {
+      switch (eventName) {
+        case 'conversation':
+          handlers.onConversation?.(
+            payload as { conversation_id: string; title: string },
+          )
+          break
+        case 'sources': {
+          const p = payload as { citations: Citation[]; confidence?: Confidence }
+          handlers.onSources?.(p.citations ?? [], p.confidence)
+          break
+        }
+        case 'token':
+          handlers.onToken?.((payload as { text: string }).text ?? '')
+          break
+        case 'done':
+          handlers.onDone?.()
+          break
+        case 'error':
+          handlers.onError?.(
+            (payload as { message: string }).message ?? 'Unknown error',
+          )
+          break
+        default:
+          break
+      }
+    },
+    signal,
+  )
+}
+
+// ---------- Agent (streaming) ----------
+
+export interface AgentStreamRequest {
+  query: string
+  conversation_id?: string
+}
+
+export interface StreamAgentHandlers {
+  onConversation?: (data: { conversation_id: string; title: string }) => void
+  onToolCall?: (tool: ToolCall) => void
+  onToolResult?: (result: ToolResult) => void
+  onSources?: (citations: Citation[], confidence?: Confidence) => void
+  onAnswer?: (text: string) => void
+  onDone?: () => void
+  onError?: (message: string) => void
+}
+
+/**
+ * Streams an agent-mode response from POST /workspaces/{id}/agent/stream.
+ * Emits interleaved tool_call / tool_result events, then sources, then the
+ * FULL answer in a single `answer` event (not token-by-token).
+ */
+export async function streamAgent(
+  workspaceId: string,
+  body: AgentStreamRequest,
+  handlers: StreamAgentHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  await consumeSSE(
+    `/workspaces/${workspaceId}/agent/stream`,
+    body,
+    (msg) => handlers.onError?.(msg),
+    (eventName, payload) => {
+      switch (eventName) {
+        case 'conversation':
+          handlers.onConversation?.(
+            payload as { conversation_id: string; title: string },
+          )
+          break
+        case 'tool_call':
+          handlers.onToolCall?.(payload as ToolCall)
+          break
+        case 'tool_result':
+          handlers.onToolResult?.(payload as ToolResult)
+          break
+        case 'sources': {
+          const p = payload as { citations: Citation[]; confidence?: Confidence }
+          handlers.onSources?.(p.citations ?? [], p.confidence)
+          break
+        }
+        case 'answer':
+          handlers.onAnswer?.((payload as { text: string }).text ?? '')
+          break
+        case 'done':
+          handlers.onDone?.()
+          break
+        case 'error':
+          handlers.onError?.(
+            (payload as { message: string }).message ?? 'Unknown error',
+          )
+          break
+        default:
+          break
+      }
+    },
+    signal,
+  )
 }

@@ -5,8 +5,16 @@ export interface WorkspaceSummary {
   created_at: string
 }
 
-export type DocumentSourceType = 'upload' | 'github'
+export type DocumentSourceType = 'upload' | 'github' | 'archive'
 export type DocumentStatus = 'processing' | 'ready' | 'failed'
+
+export type ConfidenceLabel = 'high' | 'medium' | 'low' | 'none'
+
+export interface Confidence {
+  score: number
+  label: ConfidenceLabel
+  grounded: boolean
+}
 
 export interface DocumentSummary {
   id: string
@@ -85,4 +93,22 @@ export interface AgentResponse {
 export interface UploadResponse {
   document: DocumentSummary
   message: string
+}
+
+export interface RepoOverview {
+  overview: string
+}
+
+export interface FollowupsResponse {
+  suggestions: string[]
+}
+
+export interface ToolCall {
+  name: string
+  args: Record<string, unknown>
+}
+
+export interface ToolResult {
+  name: string
+  summary: string
 }

@@ -5,10 +5,11 @@ import Layout from '../components/Layout'
 import Sidebar from '../components/Sidebar'
 import ChatPanel from '../components/ChatPanel'
 import ArchitectureGraph from '../components/ArchitectureGraph'
+import ArchitectureOverview from '../components/ArchitectureOverview'
 import { getWorkspace } from '../lib/api'
 import type { DocumentSummary } from '../lib/types'
 
-type Tab = 'chat' | 'architecture'
+type Tab = 'chat' | 'overview' | 'architecture'
 
 export default function Workspace() {
   const { workspaceId } = useParams<{ workspaceId: string }>()
@@ -31,7 +32,7 @@ export default function Workspace() {
   const onSelectDocument = (doc: DocumentSummary) => {
     setSelectedDoc(doc)
     if (doc.source_type === 'github') {
-      setTab('architecture')
+      setTab('overview')
     }
   }
 
@@ -62,6 +63,13 @@ export default function Workspace() {
               Chat
             </TabButton>
             <TabButton
+              active={tab === 'overview'}
+              disabled={!isRepoSelected}
+              onClick={() => isRepoSelected && setTab('overview')}
+            >
+              Overview
+            </TabButton>
+            <TabButton
               active={tab === 'architecture'}
               disabled={!isRepoSelected}
               onClick={() => isRepoSelected && setTab('architecture')}
@@ -77,12 +85,14 @@ export default function Workspace() {
                 conversationId={conversationId}
                 onConversationCreated={(id) => setConversationId(id)}
               />
-            ) : isRepoSelected && selectedDoc ? (
-              <ArchitectureGraph documentId={selectedDoc.id} />
-            ) : (
+            ) : !isRepoSelected || !selectedDoc ? (
               <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                Select a GitHub repository document to view its architecture.
+                Select a GitHub repository document to view its {tab}.
               </div>
+            ) : tab === 'overview' ? (
+              <ArchitectureOverview documentId={selectedDoc.id} />
+            ) : (
+              <ArchitectureGraph documentId={selectedDoc.id} />
             )}
           </div>
         </section>

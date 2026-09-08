@@ -116,8 +116,12 @@ export default function Sidebar({
           ref={fileInputRef}
           type="file"
           className="hidden"
+          accept=".pdf,.docx,.md,.txt,.zip"
           onChange={onFileChange}
         />
+        <p className="text-[10px] text-slate-500">
+          Allowed: pdf, docx, md, txt, zip
+        </p>
 
         {showRepoForm && (
           <form
@@ -166,11 +170,22 @@ export default function Sidebar({
                 onClick={() => onSelectDocument(doc)}
               >
                 <span className="mt-0.5 text-xs">
-                  {doc.source_type === 'github' ? '🗂️' : '📄'}
+                  {doc.source_type === 'github'
+                    ? '🗂️'
+                    : doc.source_type === 'archive'
+                      ? '🗜️'
+                      : '📄'}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-slate-200">
-                    {doc.filename}
+                  <span className="flex items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-200">
+                      {doc.filename}
+                    </span>
+                    {doc.source_type === 'archive' && (
+                      <span className="shrink-0 rounded bg-slate-700 px-1 py-0.5 text-[9px] font-medium uppercase text-slate-300">
+                        zip
+                      </span>
+                    )}
                   </span>
                   <span className="mt-1 flex items-center gap-2">
                     <DocumentStatusBadge status={doc.status} />
