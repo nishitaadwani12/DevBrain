@@ -1,40 +1,65 @@
 # DevBrain — AI Knowledge Agent Platform
 
-Upload your documents, then chat with an AI agent that answers with **exact citations**, remembers the
-conversation, and can **search, summarize, and compare across your whole workspace**.
+Upload documents **or paste a GitHub repo URL**, then chat with an AI agent that answers with
+**exact citations**, remembers the conversation, calls tools to search/summarize/compare, and can
+**explain a codebase's architecture** with a dependency graph.
 
-DevBrain is the productized, open-source evolution of a hackathon-winning knowledge assistant. It is a
-full RAG + tool-calling agent platform with multi-user auth — not a single-file Q&A demo.
+DevBrain is the productized, open-source evolution of a hackathon-winning knowledge assistant — a full
+RAG + tool-calling agent platform with multi-user auth, not a single-file Q&A demo.
 
 ## Features
 
-- **Multi-document workspaces** — group related docs and query them together
-- **Cited answers** — every response links back to the exact source chunk (page / paragraph)
-- **Conversation memory** — follow-up questions carry context
-- **Tool-calling agent** — `search_docs`, `summarize`, `compare_docs`
-- **Multi-user auth** — per-user documents with row-level security
+- **Multi-document workspaces** — group related docs/repos and query them together
+- **RepoLens** — paste any public GitHub repo → semantic (tree-sitter) code indexing + an
+  interactive **architecture/dependency graph**
+- **Cited answers** — every response links to the exact source (page for docs, `path:line` for code)
+- **Streaming chat** with conversation memory (follow-up questions carry context)
+- **Tool-calling agent** — `search_documents`, `list_documents`, `explain_architecture`
+- **Multi-user auth** — Supabase JWT; every query scoped per-user/workspace
 
 ## Tech Stack
 
 | Layer | Tech |
 |---|---|
-| Frontend | React + TypeScript (Vite), Tailwind, shadcn/ui |
-| Backend | FastAPI (Python) |
+| Frontend | React + TypeScript (Vite), Tailwind, React Flow, React Query |
+| Backend | FastAPI (Python), async ingestion pipeline |
 | LLM + embeddings | Google Gemini (`gemini-2.0-flash`, `text-embedding-004`) |
 | Vector store + DB | Supabase Postgres + pgvector |
+| Code parsing | tree-sitter (15+ languages) |
 | Auth + storage | Supabase |
 
-## Repo Layout
+## Architecture
 
 ```
-backend/    FastAPI app (RAG pipeline + agent)
-frontend/   React + TS client
-docs/        Architecture notes
+Upload / GitHub URL
+      │
+      ▼
+Parse (PDF/DOCX/MD) │ Clone + tree-sitter code chunking   ← async background task
+      │
+      ▼
+Chunk (page / path:line metadata) → Gemini embeddings → pgvector
+      │
+      ▼
+Query → embed → vector search (workspace-scoped) → cited prompt → Gemini (stream)
+      │                                                    │
+      ▼                                                    ▼
+Conversation memory (Postgres)                     Tool-calling agent
 ```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
+
+## API surface
+
+`/workspaces` · `/workspaces/{id}/documents` · `/workspaces/{id}/repos/ingest` ·
+`/repos/{id}/graph` · `/workspaces/{id}/search` · `/workspaces/{id}/chat` (SSE) ·
+`/workspaces/{id}/agent` · `/workspaces/{id}/conversations` · `/conversations/{id}/messages`
 
 ## Getting Started
 
-See [`docs/SETUP.md`](docs/SETUP.md).
+See [`docs/SETUP.md`](docs/SETUP.md). TL;DR: run `docs/schema.sql` in Supabase, fill the `.env`
+files, `uvicorn app.main:app --reload` (backend) and `npm run dev` (frontend).
+
+Backend tests: `cd backend && ./.venv/bin/python -m pytest` (67 tests, fully mocked/offline).
 
 ## License
 
