@@ -27,7 +27,10 @@ def embed_documents(texts: list[str]) -> list[list[float]]:
     resp = _client().models.embed_content(
         model=settings.embedding_model,
         contents=texts,
-        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_DOCUMENT",
+            output_dimensionality=settings.embedding_dim,
+        ),
     )
     return [e.values for e in resp.embeddings]
 
@@ -38,6 +41,9 @@ def embed_query(text: str) -> list[float]:
     resp = _client().models.embed_content(
         model=settings.embedding_model,
         contents=text,
-        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=settings.embedding_dim,
+        ),
     )
     return resp.embeddings[0].values

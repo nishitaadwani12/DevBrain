@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.core.auth import User, get_current_user
+from app.core.config import get_settings
 from app.core.deps import require_workspace
 
 TEST_USER_ID = "user-123"
@@ -36,5 +37,15 @@ def client():
 
 @pytest.fixture
 def anon_client():
-    """TestClient with NO overrides (auth active) for testing rejection."""
-    return TestClient(app)
+    """TestClient with NO overrides and auth forced ON, for testing rejection.
+
+    Forces auth_enabled regardless of the ambient .env (which may set
+    AUTH_ENABLED=false for local dev).
+    """
+    settings = get_settings()
+    prev = settings.auth_enabled
+    settings.auth_enabled = True
+    try:
+        yield TestClient(app)
+    finally:
+        settings.auth_enabled = prev

@@ -9,9 +9,9 @@ class Settings(BaseSettings):
 
     # Google Gemini
     gemini_api_key: str = ""
-    embedding_model: str = "text-embedding-004"
-    chat_model: str = "gemini-2.0-flash"
-    embedding_dim: int = 768  # text-embedding-004 output dimension
+    embedding_model: str = "gemini-embedding-001"
+    chat_model: str = "gemini-3.6-flash"
+    embedding_dim: int = 768  # request 768-dim output to match the pgvector column
 
     # Supabase / Postgres
     supabase_url: str = ""
