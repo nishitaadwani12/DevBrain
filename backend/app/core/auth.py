@@ -1,7 +1,8 @@
-"""Authentication dependency backed by Supabase JWTs.
+"""Authentication dependency backed by Supabase.
 
-Supabase issues an HS256 JWT (signed with the project JWT secret) on login. We
-verify it here and expose the user id (``sub``) to route handlers.
+Verifies the caller's access token by calling Supabase's ``/auth/v1/user``
+endpoint. This works regardless of Supabase's token signing method (legacy
+HS256 or the newer asymmetric keys) and needs only the project URL + anon key.
 
 For local single-user development, set ``AUTH_ENABLED=false`` to bypass token
 checks and attribute all data to ``DEV_USER_ID``.
@@ -10,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import jwt
+import httpx
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -25,28 +26,35 @@ class User:
     email: str | None = None
 
 
+def _verify_with_supabase(token: str) -> User:
+    settings = get_settings()
+    if not settings.supabase_url or not settings.supabase_anon_key:
+        raise HTTPException(500, "Supabase auth is not configured")
+    try:
+        resp = httpx.get(
+            f"{settings.supabase_url}/auth/v1/user",
+            headers={"Authorization": f"Bearer {token}", "apikey": settings.supabase_anon_key},
+            timeout=10,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(503, f"Auth service unreachable: {exc}") from exc
+
+    if resp.status_code != 200:
+        raise HTTPException(401, "Invalid or expired token")
+
+    data = resp.json()
+    user_id = data.get("id")
+    if not user_id:
+        raise HTTPException(401, "Token did not resolve to a user")
+    return User(id=user_id, email=data.get("email"))
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> User:
     settings = get_settings()
-
     if not settings.auth_enabled:
         return User(id=settings.dev_user_id)
-
     if credentials is None:
         raise HTTPException(401, "Missing bearer token")
-
-    try:
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-    except jwt.PyJWTError as exc:
-        raise HTTPException(401, f"Invalid token: {exc}") from exc
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(401, "Token missing subject")
-    return User(id=user_id, email=payload.get("email"))
+    return _verify_with_supabase(credentials.credentials)
