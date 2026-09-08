@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { BrainCircuit, Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -12,7 +14,6 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const [info, setInfo] = useState<string | null>(null)
 
-  // In dev mode (no auth) or when already authenticated, skip the login page.
   if (!authEnabled || isAuthenticated) {
     return <Navigate to="/" replace />
   }
@@ -40,22 +41,25 @@ export default function Login() {
 
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-xl font-bold text-white">
-            D
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-sm"
+      >
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gradient shadow-glow">
+            <BrainCircuit className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-2xl font-semibold text-slate-100">DevBrain</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Your AI knowledge agent for docs & code.
+          <h1 className="brand-text text-3xl font-semibold tracking-tight">DevBrain</h1>
+          <p className="mt-2 text-sm text-slate-400">
+            Your AI knowledge agent for docs &amp; code.
           </p>
         </div>
 
         <form className="card flex flex-col gap-4" onSubmit={onSubmit}>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">
-              Email
-            </label>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">Email</label>
             <input
               type="email"
               className="input"
@@ -65,9 +69,7 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">
-              Password
-            </label>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">Password</label>
             <input
               type="password"
               className="input"
@@ -81,12 +83,13 @@ export default function Login() {
           {info && <p className="text-sm text-emerald-400">{info}</p>}
 
           <button type="submit" className="btn-primary" disabled={busy}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
           </button>
 
           <button
             type="button"
-            className="text-center text-xs text-slate-400 hover:text-slate-200"
+            className="text-center text-xs text-slate-400 transition-colors hover:text-slate-200"
             onClick={() => {
               setMode(mode === 'signin' ? 'signup' : 'signin')
               setError(null)
@@ -98,7 +101,7 @@ export default function Login() {
               : 'Already have an account? Sign in'}
           </button>
         </form>
-      </div>
+      </motion.div>
     </div>
   )
 }

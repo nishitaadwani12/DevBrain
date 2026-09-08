@@ -1,9 +1,10 @@
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import type { DocumentStatus } from '../lib/types'
 
 const STYLES: Record<DocumentStatus, string> = {
-  processing: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  ready: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  failed: 'bg-red-500/15 text-red-300 border-red-500/30',
+  processing: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+  ready: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+  failed: 'bg-red-500/10 text-red-300 border-red-500/30',
 }
 
 const LABELS: Record<DocumentStatus, string> = {
@@ -14,12 +15,10 @@ const LABELS: Record<DocumentStatus, string> = {
 
 export default function DocumentStatusBadge({ status }: { status: DocumentStatus }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STYLES[status]}`}
-    >
-      {status === 'processing' && (
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
-      )}
+    <span className={`pill ${STYLES[status]}`}>
+      {status === 'processing' && <Loader2 className="h-3 w-3 animate-spin" />}
+      {status === 'ready' && <CheckCircle2 className="h-3 w-3" />}
+      {status === 'failed' && <XCircle className="h-3 w-3" />}
       {LABELS[status]}
     </span>
   )

@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { AnimatePresence, motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
+import {
+  ArrowRight,
+  Bot,
+  GitCompareArrows,
+  Loader2,
+  Network,
+  Search,
+  Send,
+  Sparkles,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
 import { getFollowups, listMessages, streamAgent, streamChat } from '../lib/api'
 import type { Citation, Confidence, MessageOut, ToolCall, ToolResult } from '../lib/types'
+import { useToast } from '../context/ToastContext'
 import CitationList from './CitationList'
 import ConfidenceBadge from './ConfidenceBadge'
 
@@ -17,25 +31,39 @@ interface ToolStep {
   summary: string | null
 }
 
-const TOOL_ICONS: Record<string, string> = {
-  search_documents: '🔍',
-  explain_architecture: '📊',
-  compare_documents: '⚖️',
+const TOOL_ICONS: Record<string, LucideIcon> = {
+  search_documents: Search,
+  explain_architecture: Network,
+  compare_documents: GitCompareArrows,
 }
 
-function toolIcon(name: string): string {
-  return TOOL_ICONS[name] ?? '🔧'
+function toolIcon(name: string): LucideIcon {
+  return TOOL_ICONS[name] ?? Wrench
 }
 
 function MessageBubble({ message }: { message: MessageOut }) {
   const isUser = message.role === 'user'
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}
+    >
+      <span
+        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
           isUser
-            ? 'bg-indigo-600 text-white'
-            : 'border border-slate-800 bg-slate-900/70 text-slate-100'
+            ? 'bg-white/5 text-slate-300'
+            : 'bg-brand-gradient text-white shadow-glow'
+        }`}
+      >
+        {isUser ? <span className="text-xs font-semibold">You</span> : <Bot className="h-4 w-4" />}
+      </span>
+      <div
+        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+          isUser
+            ? 'bg-indigo-600/90 text-white'
+            : 'surface text-slate-100'
         }`}
       >
         {isUser ? (
@@ -47,26 +75,48 @@ function MessageBubble({ message }: { message: MessageOut }) {
         )}
         {!isUser && <CitationList citations={message.citations} />}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
 function ToolSteps({ steps }: { steps: ToolStep[] }) {
   if (!steps.length) return null
   return (
-    <ul className="mb-3 space-y-1.5 border-b border-slate-800 pb-3">
-      {steps.map((s, i) => (
-        <li key={`${s.name}-${i}`} className="flex items-center gap-2 text-xs text-slate-400">
-          <span>{toolIcon(s.name)}</span>
-          <span className="font-mono text-slate-300">{s.name}</span>
-          {s.summary === null ? (
-            <span className="text-slate-500">…</span>
-          ) : (
-            <span className="text-slate-500">→ {s.summary}</span>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div className="mb-3 border-b border-white/5 pb-3">
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-300">
+        <Sparkles className="h-3 w-3" />
+        Agent reasoning
+      </p>
+      <ul className="space-y-1.5">
+        <AnimatePresence initial={false}>
+          {steps.map((s, i) => {
+            const Icon = toolIcon(s.name)
+            return (
+              <motion.li
+                key={`${s.name}-${i}`}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center gap-2 text-xs"
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-500/15 text-violet-300">
+                  <Icon className="h-3 w-3" />
+                </span>
+                <span className="font-mono text-slate-300">{s.name}</span>
+                {s.summary === null ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-slate-500" />
+                ) : (
+                  <span className="text-slate-500">
+                    <ArrowRight className="mr-1 inline h-3 w-3" />
+                    {s.summary}
+                  </span>
+                )}
+              </motion.li>
+            )
+          })}
+        </AnimatePresence>
+      </ul>
+    </div>
   )
 }
 
@@ -76,6 +126,7 @@ export default function ChatPanel({
   onConversationCreated,
 }: ChatPanelProps) {
   const queryClient = useQueryClient()
+  const { toast } = useToast()
   const [input, setInput] = useState('')
   const [agentMode, setAgentMode] = useState(false)
   const [streaming, setStreaming] = useState(false)
@@ -92,6 +143,7 @@ export default function ChatPanel({
     queryKey: ['messages', conversationId],
     queryFn: () => listMessages(conversationId as string),
     enabled: Boolean(conversationId),
+    retry: 1,
   })
 
   useEffect(() => {
@@ -115,7 +167,6 @@ export default function ChatPanel({
     setFollowups([])
     setStreaming(true)
 
-    // Optimistically show the user's message.
     const optimisticUser: MessageOut = {
       id: `optimistic-${Date.now()}`,
       role: 'user',
@@ -149,7 +200,6 @@ export default function ChatPanel({
             onToolResult: (result: ToolResult) =>
               setToolSteps((prev) => {
                 const next = [...prev]
-                // Fill the most recent pending step with the matching name.
                 for (let i = next.length - 1; i >= 0; i--) {
                   if (next[i].name === result.name && next[i].summary === null) {
                     next[i] = { ...next[i], summary: result.summary }
@@ -200,30 +250,29 @@ export default function ChatPanel({
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-        setErrorMsg(err instanceof Error ? err.message : 'Streaming failed')
+        const msg = err instanceof Error ? err.message : 'Streaming failed'
+        setErrorMsg(msg)
+        toast(msg, 'error')
       }
     } finally {
       setStreaming(false)
       abortRef.current = null
       const finalConvId = newConversationId ?? conversationId
 
-      // Fetch follow-up suggestions from the completed answer.
       if (answerText && !controller.signal.aborted) {
         try {
           const { suggestions } = await getFollowups(workspaceId, query, answerText)
           setFollowups(suggestions.slice(0, 3))
         } catch {
-          // Non-critical; ignore follow-up fetch failures.
+          // Non-critical.
         }
       }
 
-      // Refetch persisted messages & conversations after the stream completes.
       await queryClient.invalidateQueries({ queryKey: ['messages', finalConvId] })
       await queryClient.invalidateQueries({
         queryKey: ['conversations', workspaceId],
       })
 
-      // Keep confidence for the latest answer; clear the transient live bubble.
       setConfidence(latestConfidence)
       setStreamedAnswer('')
       setStreamedCitations([])
@@ -240,44 +289,57 @@ export default function ChatPanel({
 
   const hasContent = messages.length > 0 || streaming || streamedAnswer
   const showLiveBubble = streaming || Boolean(streamedAnswer) || toolSteps.length > 0
-  const showFooter =
-    !showLiveBubble && (Boolean(confidence) || followups.length > 0)
+  const showFooter = !showLiveBubble && (Boolean(confidence) || followups.length > 0)
 
   return (
     <div className="flex h-full flex-col">
       {/* Chat header */}
-      <div className="flex items-center justify-between border-b border-slate-800 px-6 py-2.5">
-        <span className="text-xs text-slate-500">
-          {agentMode
-            ? 'Agent mode: multi-step reasoning with tools'
-            : 'Chat mode: grounded answers with citations'}
+      <div className="flex items-center justify-between border-b border-white/5 px-6 py-3">
+        <span className="flex items-center gap-2 text-xs text-slate-500">
+          {agentMode ? (
+            <>
+              <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+              Agent mode — multi-step reasoning with tools
+            </>
+          ) : (
+            <>
+              <Bot className="h-3.5 w-3.5 text-indigo-400" />
+              Chat mode — grounded answers with citations
+            </>
+          )}
         </span>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-300">
           <span>Agent mode</span>
           <button
             type="button"
             role="switch"
             aria-checked={agentMode}
+            aria-label="Toggle agent mode"
             onClick={() => setAgentMode((v) => !v)}
             disabled={streaming}
             className={`relative h-5 w-9 rounded-full transition-colors disabled:opacity-50 ${
-              agentMode ? 'bg-indigo-600' : 'bg-slate-700'
+              agentMode ? 'bg-brand-gradient' : 'bg-slate-700'
             }`}
           >
-            <span
-              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                agentMode ? 'translate-x-4' : 'translate-x-0.5'
+            <motion.span
+              layout
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow ${
+                agentMode ? 'right-0.5' : 'left-0.5'
               }`}
             />
           </button>
         </label>
       </div>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-6">
+      <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto p-6">
         {!hasContent && (
-          <div className="flex h-full flex-col items-center justify-center text-center text-slate-500">
-            <p className="text-lg font-medium text-slate-300">Ask DevBrain anything</p>
-            <p className="mt-1 max-w-sm text-sm">
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 text-indigo-300">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <p className="text-lg font-medium text-slate-100">Ask DevBrain anything</p>
+            <p className="mt-1 max-w-sm text-sm text-slate-400">
               Ask questions about your uploaded documents and ingested repositories.
               Answers include citations to the source material.
             </p>
@@ -289,19 +351,24 @@ export default function ChatPanel({
         ))}
 
         {showLiveBubble && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-slate-100">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-glow">
+              <Bot className="h-4 w-4" />
+            </span>
+            <div className="max-w-[80%] surface px-4 py-3 text-slate-100">
               <ToolSteps steps={toolSteps} />
               {streamedAnswer ? (
                 <div className="prose-devbrain">
                   <ReactMarkdown>{streamedAnswer}</ReactMarkdown>
                 </div>
               ) : (
-                <span className="inline-flex gap-1 text-slate-500">
-                  <span className="animate-bounce">•</span>
-                  <span className="animate-bounce [animation-delay:150ms]">•</span>
-                  <span className="animate-bounce [animation-delay:300ms]">•</span>
-                </span>
+                toolSteps.length === 0 && (
+                  <span className="inline-flex gap-1 text-slate-500">
+                    <span className="animate-bounce">•</span>
+                    <span className="animate-bounce [animation-delay:150ms]">•</span>
+                    <span className="animate-bounce [animation-delay:300ms]">•</span>
+                  </span>
+                )
               )}
               <CitationList citations={streamedCitations} />
               {confidence && <ConfidenceBadge confidence={confidence} />}
@@ -310,8 +377,9 @@ export default function ChatPanel({
         )}
 
         {showFooter && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%]">
+          <div className="flex items-start gap-3">
+            <span className="h-8 w-8 shrink-0" />
+            <div className="max-w-[80%]">
               {confidence && <ConfidenceBadge confidence={confidence} />}
               {followups.length > 0 && (
                 <div className="mt-3">
@@ -320,14 +388,17 @@ export default function ChatPanel({
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {followups.map((q) => (
-                      <button
+                      <motion.button
                         key={q}
                         type="button"
-                        className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-left text-xs text-slate-200 transition-colors hover:border-indigo-500/50 hover:bg-indigo-500/10"
+                        whileHover={{ y: -1 }}
+                        whileTap={{ scale: 0.97 }}
+                        className="chip"
                         onClick={() => void send(q)}
                       >
                         {q}
-                      </button>
+                        <ArrowRight className="h-3 w-3" />
+                      </motion.button>
                     ))}
                   </div>
                 </div>
@@ -337,16 +408,16 @@ export default function ChatPanel({
         )}
 
         {errorMsg && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
             {errorMsg}
           </div>
         )}
       </div>
 
-      <div className="border-t border-slate-800 p-4">
-        <div className="flex items-end gap-2">
+      <div className="border-t border-white/5 p-4">
+        <div className="mx-auto flex max-w-3xl items-end gap-2">
           <textarea
-            className="input max-h-40 min-h-[44px] resize-none"
+            className="input max-h-40 min-h-[46px] resize-none"
             placeholder="Ask a question…  (Enter to send, Shift+Enter for newline)"
             value={input}
             rows={1}
@@ -354,14 +425,19 @@ export default function ChatPanel({
             onKeyDown={onKeyDown}
             disabled={streaming}
           />
-          <button
+          <motion.button
             type="button"
-            className="btn-primary h-[44px]"
+            whileTap={{ scale: 0.96 }}
+            className="btn-primary h-[46px] px-4"
             onClick={() => void send()}
             disabled={streaming || !input.trim()}
           >
-            {streaming ? 'Sending…' : 'Send'}
-          </button>
+            {streaming ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </motion.button>
         </div>
       </div>
     </div>
