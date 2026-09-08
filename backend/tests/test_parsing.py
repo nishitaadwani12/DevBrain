@@ -40,6 +40,13 @@ def test_empty_file_yields_no_segments():
     assert parse_document("empty.txt", b"   ") == []
 
 
+def test_nul_bytes_are_stripped():
+    segments = parse_document("weird.txt", b"hello\x00world\x00")
+    assert len(segments) == 1
+    assert "\x00" not in segments[0].text
+    assert segments[0].text == "helloworld"
+
+
 def test_unsupported_extension_raises():
     with pytest.raises(UnsupportedFileType):
         parse_document("image.png", b"\x89PNG")

@@ -189,8 +189,9 @@ def insert_chunks(
                 """,
                 [
                     (
-                        document_id, workspace_id, c.text, c.chunk_index, c.page,
-                        c.source_path, c.start_line, c.end_line, c.token_count, emb,
+                        document_id, workspace_id, c.text.replace("\x00", ""),
+                        c.chunk_index, c.page, c.source_path, c.start_line,
+                        c.end_line, c.token_count, emb,
                     )
                     for c, emb in zip(chunks, embeddings)
                 ],

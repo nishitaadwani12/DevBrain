@@ -72,10 +72,18 @@ def is_supported(filename: str) -> bool:
     return ext in SUPPORTED_EXTENSIONS
 
 
+def sanitize_text(text: str) -> str:
+    """Remove NUL bytes (Postgres text columns reject them) and normalize."""
+    return text.replace("\x00", "")
+
+
 def parse_document(filename: str, data: bytes) -> list[Segment]:
-    """Dispatch on file extension; return non-empty text segments."""
+    """Dispatch on file extension; return non-empty, sanitized text segments."""
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "txt"
     parser = _PARSERS.get(ext)
     if parser is None:
         raise UnsupportedFileType(f"Unsupported file type: .{ext}")
-    return parser(data)
+    segments = parser(data)
+    for seg in segments:
+        seg.text = sanitize_text(seg.text)
+    return [s for s in segments if s.text.strip()]
