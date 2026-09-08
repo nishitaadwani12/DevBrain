@@ -9,12 +9,15 @@ RAG + tool-calling agent platform with multi-user auth, not a single-file Q&A de
 
 ## Features
 
-- **Multi-document workspaces** — group related docs/repos and query them together
-- **RepoLens** — paste any public GitHub repo → semantic (tree-sitter) code indexing + an
-  interactive **architecture/dependency graph**
-- **Cited answers** — every response links to the exact source (page for docs, `path:line` for code)
-- **Streaming chat** with conversation memory (follow-up questions carry context)
-- **Tool-calling agent** — `search_documents`, `list_documents`, `explain_architecture`
+- **Multi-document workspaces** — group related docs/repos (and `.zip` code archives) and query them together
+- **RepoLens** — paste any public GitHub repo → semantic (tree-sitter) code indexing, an interactive
+  **architecture/dependency graph**, and an **AI-generated architecture overview**
+- **Cited answers** — every response links to the exact source (page for docs, `path:line` for code),
+  with an **answer-confidence score** that flags weakly-grounded answers
+- **Streaming chat** with conversation memory (follow-up questions carry context) + **suggested follow-ups**
+- **Tool-calling agent** — `search_documents`, `list_documents`, `explain_architecture`,
+  `compare_documents`; with a **streaming variant** that emits each tool step live
+- **Evaluation harness** — pure retrieval/citation scoring + golden dataset (`backend/eval/`)
 - **Multi-user auth** — Supabase JWT; every query scoped per-user/workspace
 
 ## Tech Stack
@@ -51,15 +54,16 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
 ## API surface
 
 `/workspaces` · `/workspaces/{id}/documents` · `/workspaces/{id}/repos/ingest` ·
-`/repos/{id}/graph` · `/workspaces/{id}/search` · `/workspaces/{id}/chat` (SSE) ·
-`/workspaces/{id}/agent` · `/workspaces/{id}/conversations` · `/conversations/{id}/messages`
+`/repos/{id}/graph` · `/repos/{id}/overview` · `/workspaces/{id}/search` ·
+`/workspaces/{id}/chat` (SSE) · `/workspaces/{id}/agent` · `/workspaces/{id}/agent/stream` (SSE) ·
+`/workspaces/{id}/followups` · `/workspaces/{id}/conversations` · `/conversations/{id}/messages`
 
 ## Getting Started
 
 See [`docs/SETUP.md`](docs/SETUP.md). TL;DR: run `docs/schema.sql` in Supabase, fill the `.env`
 files, `uvicorn app.main:app --reload` (backend) and `npm run dev` (frontend).
 
-Backend tests: `cd backend && ./.venv/bin/python -m pytest` (67 tests, fully mocked/offline).
+Backend tests: `cd backend && ./.venv/bin/python -m pytest` (88 tests, fully mocked/offline).
 
 ## License
 
