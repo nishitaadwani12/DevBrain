@@ -29,10 +29,29 @@ def test_build_prompt_handles_no_hits():
 
 
 def test_retrieve_uses_embedding_and_store(monkeypatch):
+    seen = {}
     monkeypatch.setattr(rag, "embed_query", lambda q: [0.1] * 768)
-    monkeypatch.setattr(
-        rag.vectorstore, "search_chunks", lambda emb, top_k=5: [_hit(1)][:top_k]
-    )
-    hits = rag.retrieve("q", top_k=1)
+
+    def fake_search(ws, emb, top_k=5):
+        seen["ws"] = ws
+        return [_hit(1)][:top_k]
+
+    monkeypatch.setattr(rag.vectorstore, "search_chunks", fake_search)
+    hits = rag.retrieve("ws-1", "q", top_k=1)
     assert len(hits) == 1
     assert hits[0]["chunk_id"] == "c1"
+    assert seen["ws"] == "ws-1"  # workspace scoping is passed through
+
+
+def test_build_context_renders_code_path_and_lines():
+    hit = {"filename": "repo", "content": "def f(): ...", "source_path": "app/main.py",
+           "start_line": 10, "end_line": 20}
+    ctx = rag.build_context([hit])
+    assert "app/main.py:10-20" in ctx
+
+
+def test_build_prompt_includes_history():
+    history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
+    prompt = rag.build_prompt("follow up", [_hit(1)], history=history)
+    assert "Conversation so far" in prompt
+    assert "hello" in prompt

@@ -17,7 +17,13 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_key: str = ""
     supabase_anon_key: str = ""
+    supabase_jwt_secret: str = ""  # HS256 secret used to verify auth tokens
     database_url: str = ""
+
+    # Auth — when true, endpoints require a valid Supabase JWT. Disable only for
+    # local single-user development.
+    auth_enabled: bool = True
+    dev_user_id: str = "00000000-0000-0000-0000-000000000000"
 
     # App
     cors_origins: str = "http://localhost:5173"

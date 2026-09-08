@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _EMBED_BATCH = 50
 
 
-def process_document(document_id: str, filename: str, data: bytes) -> None:
+def process_document(document_id: str, workspace_id: str, filename: str, data: bytes) -> None:
     try:
         segments = parse_document(filename, data)
         if not segments:
@@ -35,7 +35,7 @@ def process_document(document_id: str, filename: str, data: bytes) -> None:
             batch = chunks[start : start + _EMBED_BATCH]
             embeddings.extend(embed_documents([c.text for c in batch]))
 
-        vectorstore.insert_chunks(document_id, chunks, embeddings)
+        vectorstore.insert_chunks(document_id, workspace_id, chunks, embeddings)
         vectorstore.set_document_status(document_id, "ready", chunk_count=len(chunks))
         logger.info("Processed document %s (%d chunks)", document_id, len(chunks))
     except Exception as exc:  # noqa: BLE001 — surface any failure to the document row

@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from app.services import vectorstore
 from app.services.code_chunking import chunk_code
 from app.services.embeddings import embed_documents
+from app.services.repo_graph import SourceFile, build_graph
 
 logger = logging.getLogger(__name__)
 
@@ -91,12 +92,13 @@ def _iter_source_files(root: str):
                 return
 
 
-def process_repo(document_id: str, url: str) -> None:
+def process_repo(document_id: str, workspace_id: str, url: str) -> None:
     tmp = tempfile.mkdtemp(prefix="repolens_")
     try:
         _clone(url, tmp)
 
         all_chunks = []
+        source_files: list[SourceFile] = []
         next_index = 0
         for rel_path, ext in _iter_source_files(tmp):
             full = os.path.join(tmp, rel_path)
@@ -106,7 +108,9 @@ def process_repo(document_id: str, url: str) -> None:
                 continue
             if not text.strip():
                 continue
-            chunks = chunk_code(text, ext, rel_path, start_index=next_index)
+            rel_posix = rel_path.replace(os.sep, "/")
+            source_files.append(SourceFile(path=rel_posix, ext=ext, text=text))
+            chunks = chunk_code(text, ext, rel_posix, start_index=next_index)
             all_chunks.extend(chunks)
             next_index += len(chunks)
             if len(all_chunks) >= MAX_CHUNKS:
@@ -121,7 +125,15 @@ def process_repo(document_id: str, url: str) -> None:
             batch = all_chunks[start : start + _EMBED_BATCH]
             embeddings.extend(embed_documents([c.text for c in batch]))
 
-        vectorstore.insert_chunks(document_id, all_chunks, embeddings)
+        vectorstore.insert_chunks(document_id, workspace_id, all_chunks, embeddings)
+
+        # Build + persist the architecture graph (best-effort).
+        try:
+            graph = build_graph(source_files)
+            vectorstore.set_document_graph(document_id, graph)
+        except Exception:  # noqa: BLE001
+            logger.exception("Graph build failed for %s (non-fatal)", url)
+
         vectorstore.set_document_status(document_id, "ready", chunk_count=len(all_chunks))
         logger.info("Ingested repo %s (%d chunks)", url, len(all_chunks))
     except RepoIngestError as exc:

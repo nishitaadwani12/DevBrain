@@ -16,10 +16,10 @@ SYSTEM_INSTRUCTION = (
 )
 
 
-def retrieve(query: str, top_k: int = 5) -> list[dict]:
-    """Embed the query and fetch the nearest chunks."""
+def retrieve(workspace_id: str, query: str, top_k: int = 5) -> list[dict]:
+    """Embed the query and fetch the nearest chunks within a workspace."""
     query_embedding = embed_query(query)
-    return vectorstore.search_chunks(query_embedding, top_k=top_k)
+    return vectorstore.search_chunks(workspace_id, query_embedding, top_k=top_k)
 
 
 def build_context(hits: list[dict]) -> str:
@@ -40,15 +40,24 @@ def build_context(hits: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def build_prompt(query: str, hits: list[dict]) -> str:
+def build_history(history: list[dict] | None) -> str:
+    """Render prior turns so follow-up questions have context."""
+    if not history:
+        return ""
+    lines = [f"{m['role'].capitalize()}: {m['content']}" for m in history]
+    return "Conversation so far:\n" + "\n".join(lines) + "\n\n"
+
+
+def build_prompt(query: str, hits: list[dict], history: list[dict] | None = None) -> str:
+    history_block = build_history(history)
     if not hits:
         return (
-            f"{SYSTEM_INSTRUCTION}\n\n"
+            f"{SYSTEM_INSTRUCTION}\n\n{history_block}"
             "No sources were retrieved. Tell the user you don't have any relevant "
             f"documents to answer this.\n\nQuestion: {query}"
         )
     return (
-        f"{SYSTEM_INSTRUCTION}\n\n"
+        f"{SYSTEM_INSTRUCTION}\n\n{history_block}"
         f"Sources:\n{build_context(hits)}\n\n"
         f"Question: {query}\n\nAnswer (with inline [n] citations):"
     )

@@ -47,7 +47,11 @@ def test_process_repo_success(monkeypatch, tmp_path):
     monkeypatch.setattr(repo_ingest, "embed_documents", lambda texts: [[0.0] * 768 for _ in texts])
     monkeypatch.setattr(
         repo_ingest.vectorstore, "insert_chunks",
-        lambda doc_id, chunks, embs: captured.update(chunks=chunks),
+        lambda doc_id, ws_id, chunks, embs: captured.update(chunks=chunks, ws=ws_id),
+    )
+    monkeypatch.setattr(
+        repo_ingest.vectorstore, "set_document_graph",
+        lambda doc_id, graph: captured.update(graph=graph),
     )
     monkeypatch.setattr(
         repo_ingest.vectorstore, "set_document_status",
@@ -56,15 +60,19 @@ def test_process_repo_success(monkeypatch, tmp_path):
         ),
     )
 
-    repo_ingest.process_repo("doc-1", "https://github.com/x/y")
+    repo_ingest.process_repo("doc-1", "ws-1", "https://github.com/x/y")
 
     assert captured["status"] == "ready"
     assert captured["count"] > 0
+    assert captured["ws"] == "ws-1"
     paths = {c.source_path for c in captured["chunks"]}
     assert any(p.endswith("main.py") for p in paths)
     assert any(p.endswith("README.md") for p in paths)
     # skipped directory not ingested
     assert not any("node_modules" in p for p in paths)
+    # architecture graph was built and persisted
+    assert "graph" in captured
+    assert captured["graph"]["stats"]["file_count"] >= 2
 
 
 def test_process_repo_clone_failure_marks_failed(monkeypatch):
@@ -79,6 +87,6 @@ def test_process_repo_clone_failure_marks_failed(monkeypatch):
             status=status, error=error
         ),
     )
-    repo_ingest.process_repo("doc-2", "https://github.com/x/y")
+    repo_ingest.process_repo("doc-2", "ws-1", "https://github.com/x/y")
     assert captured["status"] == "failed"
     assert "clone failed" in captured["error"]

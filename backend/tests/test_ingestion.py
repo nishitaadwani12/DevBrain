@@ -11,7 +11,7 @@ def test_process_document_success(monkeypatch):
     monkeypatch.setattr(
         ingestion.vectorstore,
         "insert_chunks",
-        lambda doc_id, chunks, embeddings: calls.setdefault("inserted", len(chunks)),
+        lambda doc_id, ws_id, chunks, embeddings: calls.setdefault("inserted", len(chunks)),
     )
     monkeypatch.setattr(
         ingestion.vectorstore,
@@ -21,7 +21,7 @@ def test_process_document_success(monkeypatch):
         ),
     )
 
-    ingestion.process_document("doc-1", "notes.txt", b"content " * 500)
+    ingestion.process_document("doc-1", "ws-1", "notes.txt", b"content " * 500)
 
     assert calls["inserted"] > 0
     status, chunk_count, error = calls["status"]
@@ -39,7 +39,7 @@ def test_process_document_no_text_marks_failed(monkeypatch):
             status=status, error=error
         ),
     )
-    ingestion.process_document("doc-2", "empty.txt", b"   ")
+    ingestion.process_document("doc-2", "ws-1", "empty.txt", b"   ")
     assert captured["status"] == "failed"
     assert "No extractable text" in captured["error"]
 
@@ -58,6 +58,6 @@ def test_process_document_embedding_error_marks_failed(monkeypatch):
             status=status, error=error
         ),
     )
-    ingestion.process_document("doc-3", "notes.txt", b"content " * 500)
+    ingestion.process_document("doc-3", "ws-1", "notes.txt", b"content " * 500)
     assert captured["status"] == "failed"
     assert "gemini down" in captured["error"]

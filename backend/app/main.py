@@ -6,7 +6,15 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import chat, documents, repos, search
+from app.api import (
+    agent,
+    chat,
+    conversations,
+    documents,
+    repos,
+    search,
+    workspaces,
+)
 from app.core.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -23,10 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(workspaces.router)
 app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(chat.router)
 app.include_router(repos.router)
+app.include_router(conversations.router)
+app.include_router(agent.router)
 
 
 @app.get("/health", tags=["meta"])
