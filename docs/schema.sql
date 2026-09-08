@@ -8,6 +8,8 @@ create table if not exists documents (
     id          uuid primary key default gen_random_uuid(),
     filename    text not null,
     file_type   text not null,
+    source_type text not null default 'upload',  -- upload | github
+    source_url  text,                            -- repo URL for github sources
     status      text not null default 'processing',  -- processing | ready | failed
     chunk_count integer,
     error       text,
@@ -19,7 +21,10 @@ create table if not exists chunks (
     document_id  uuid not null references documents(id) on delete cascade,
     content      text not null,
     chunk_index  integer not null,
-    page         integer,
+    page         integer,       -- source page (uploaded docs)
+    source_path  text,          -- file path within a repo (github sources)
+    start_line   integer,       -- code citation: first line
+    end_line     integer,       -- code citation: last line
     token_count  integer,
     embedding    vector(768) not null,  -- text-embedding-004 dimension
     created_at   timestamptz not null default now()

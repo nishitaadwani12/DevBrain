@@ -24,15 +24,20 @@ def get_conn() -> Iterator[psycopg.Connection]:
         conn.close()
 
 
-def create_document(filename: str, file_type: str) -> str:
+def create_document(
+    filename: str,
+    file_type: str,
+    source_type: str = "upload",
+    source_url: str | None = None,
+) -> str:
     with get_conn() as conn:
         row = conn.execute(
             """
-            insert into documents (filename, file_type, status)
-            values (%s, %s, 'processing')
+            insert into documents (filename, file_type, source_type, source_url, status)
+            values (%s, %s, %s, %s, 'processing')
             returning id
             """,
-            (filename, file_type),
+            (filename, file_type, source_type, source_url),
         ).fetchone()
         conn.commit()
         return str(row[0])
@@ -60,61 +65,54 @@ def insert_chunks(document_id: str, chunks: list[Chunk], embeddings: list[list[f
         with conn.cursor() as cur:
             cur.executemany(
                 """
-                insert into chunks (document_id, content, chunk_index, page, token_count, embedding)
-                values (%s, %s, %s, %s, %s, %s)
+                insert into chunks
+                    (document_id, content, chunk_index, page, source_path,
+                     start_line, end_line, token_count, embedding)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 [
-                    (document_id, c.text, c.chunk_index, c.page, c.token_count, emb)
+                    (
+                        document_id, c.text, c.chunk_index, c.page, c.source_path,
+                        c.start_line, c.end_line, c.token_count, emb,
+                    )
                     for c, emb in zip(chunks, embeddings)
                 ],
             )
         conn.commit()
 
 
+_DOC_COLUMNS = "id, filename, file_type, source_type, source_url, status, chunk_count, error, created_at"
+
+
+def _row_to_document(r) -> dict:
+    return {
+        "id": str(r[0]),
+        "filename": r[1],
+        "file_type": r[2],
+        "source_type": r[3],
+        "source_url": r[4],
+        "status": r[5],
+        "chunk_count": r[6],
+        "error": r[7],
+        "created_at": r[8].isoformat() if r[8] else None,
+    }
+
+
 def list_documents() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            """
-            select id, filename, file_type, status, chunk_count, error, created_at
-              from documents
-             order by created_at desc
-            """
+            f"select {_DOC_COLUMNS} from documents order by created_at desc"
         ).fetchall()
-        return [
-            {
-                "id": str(r[0]),
-                "filename": r[1],
-                "file_type": r[2],
-                "status": r[3],
-                "chunk_count": r[4],
-                "error": r[5],
-                "created_at": r[6].isoformat() if r[6] else None,
-            }
-            for r in rows
-        ]
+        return [_row_to_document(r) for r in rows]
 
 
 def get_document(document_id: str) -> dict | None:
     with get_conn() as conn:
         r = conn.execute(
-            """
-            select id, filename, file_type, status, chunk_count, error, created_at
-              from documents
-             where id = %s
-            """,
+            f"select {_DOC_COLUMNS} from documents where id = %s",
             (document_id,),
         ).fetchone()
-        if not r:
-            return None
-        return {
-            "id": str(r[0]),
-            "filename": r[1],
-            "file_type": r[2],
-            "status": r[3],
-            "chunk_count": r[4],
-            "error": r[5],
-            "created_at": r[6].isoformat() if r[6] else None,
-        }
+        return _row_to_document(r) if r else None
 
 
 def search_chunks(query_embedding: list[float], top_k: int = 5) -> list[dict]:
@@ -123,6 +121,7 @@ def search_chunks(query_embedding: list[float], top_k: int = 5) -> list[dict]:
         rows = conn.execute(
             """
             select c.id, c.document_id, d.filename, c.content, c.page, c.chunk_index,
+                   c.source_path, c.start_line, c.end_line,
                    c.embedding <=> %s as distance
               from chunks c
               join documents d on d.id = c.document_id
@@ -139,7 +138,10 @@ def search_chunks(query_embedding: list[float], top_k: int = 5) -> list[dict]:
                 "content": r[3],
                 "page": r[4],
                 "chunk_index": r[5],
-                "distance": float(r[6]),
+                "source_path": r[6],
+                "start_line": r[7],
+                "end_line": r[8],
+                "distance": float(r[9]),
             }
             for r in rows
         ]

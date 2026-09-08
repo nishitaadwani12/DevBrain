@@ -26,9 +26,16 @@ def build_context(hits: list[dict]) -> str:
     """Render retrieved chunks as a numbered source list for the prompt."""
     blocks = []
     for i, hit in enumerate(hits, start=1):
-        location = f"{hit['filename']}"
-        if hit.get("page") is not None:
-            location += f", p.{hit['page']}"
+        if hit.get("source_path"):
+            location = hit["source_path"]
+            if hit.get("start_line") is not None:
+                location += f":{hit['start_line']}"
+                if hit.get("end_line") and hit["end_line"] != hit["start_line"]:
+                    location += f"-{hit['end_line']}"
+        else:
+            location = hit["filename"]
+            if hit.get("page") is not None:
+                location += f", p.{hit['page']}"
         blocks.append(f"[{i}] ({location})\n{hit['content']}")
     return "\n\n".join(blocks)
 

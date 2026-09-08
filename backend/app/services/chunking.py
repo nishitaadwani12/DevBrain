@@ -11,12 +11,20 @@ from app.services.parsing import Segment
 _encoder = tiktoken.get_encoding("cl100k_base")
 
 
+def count_tokens(text: str) -> int:
+    return len(_encoder.encode(text))
+
+
 @dataclass
 class Chunk:
     text: str
     chunk_index: int
-    page: int | None
-    token_count: int
+    page: int | None = None
+    token_count: int = 0
+    # Code-source location (RepoLens); None for uploaded documents.
+    source_path: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
 
 
 def _split_tokens(text: str, chunk_tokens: int, overlap: int) -> list[str]:
