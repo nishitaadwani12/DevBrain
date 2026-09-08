@@ -31,6 +31,7 @@ create table if not exists documents (
     chunk_count  integer,
     error        text,
     graph        jsonb,   -- RepoLens architecture graph (github sources)
+    overview     text,    -- AI-generated architecture overview (github sources)
     created_at   timestamptz not null default now()
 );
 create index if not exists documents_workspace_idx on documents(workspace_id);

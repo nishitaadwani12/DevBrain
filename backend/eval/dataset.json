@@ -1,0 +1,20 @@
+{
+  "description": "Golden Q&A set for DevBrain retrieval/answer evaluation. Populate `expected_sources` with substrings of the filenames or code paths that should be retrieved for each question, and `answer_keywords` with terms a correct answer must mention. Point the runner at a workspace that has the referenced documents ingested.",
+  "cases": [
+    {
+      "question": "How are documents chunked before embedding?",
+      "expected_sources": ["chunking"],
+      "answer_keywords": ["token", "chunk"]
+    },
+    {
+      "question": "How is the architecture dependency graph built?",
+      "expected_sources": ["repo_graph"],
+      "answer_keywords": ["import", "graph"]
+    },
+    {
+      "question": "How does authentication work?",
+      "expected_sources": ["auth"],
+      "answer_keywords": ["jwt", "token"]
+    }
+  ]
+}

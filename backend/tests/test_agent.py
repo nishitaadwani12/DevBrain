@@ -39,8 +39,64 @@ def test_dispatch_explain_architecture(monkeypatch):
     assert result["top_files"][0]["dependents"] == 2
 
 
+def test_dispatch_compare_documents_groups_by_source(monkeypatch):
+    hits = [
+        {**_hit(1), "filename": "a.pdf"},
+        {**_hit(2), "filename": "b.pdf"},
+        {**_hit(3), "filename": "a.pdf"},
+    ]
+    monkeypatch.setattr(agent.rag, "retrieve", lambda ws, q, top_k=8: hits)
+    citations = []
+    result = agent.dispatch_tool("compare_documents", {"topic": "auth"}, "ws-1", "u-1", citations)
+    groups = {g["document"]: g for g in result["by_document"]}
+    assert set(groups) == {"a.pdf", "b.pdf"}
+    assert len(groups["a.pdf"]["excerpts"]) == 2
+    assert len(citations) == 3
+
+
 def test_dispatch_unknown_tool():
     assert "Unknown tool" in agent.dispatch_tool("bogus", {}, "ws-1", "u-1", [])["error"]
+
+
+def test_run_agent_returns_final(monkeypatch):
+    def fake_events(ws, uid, q, history=None):
+        yield {"type": "tool_call", "name": "search_documents", "args": {}}
+        yield {"type": "final", "answer": "done [1]",
+               "citations": [{"index": 1}], "tool_trace": ["search_documents"]}
+
+    monkeypatch.setattr(agent, "agent_events", fake_events)
+    result = agent.run_agent("ws-1", "u-1", "q")
+    assert result["answer"] == "done [1]"
+    assert result["tool_trace"] == ["search_documents"]
+
+
+def test_agent_stream_endpoint(client, monkeypatch):
+    monkeypatch.setattr(
+        conversation_store, "create_conversation",
+        lambda ws, uid, title: {"id": "conv-1", "workspace_id": "ws-1", "title": title, "created_at": None},
+    )
+    monkeypatch.setattr(conversation_store, "list_messages", lambda cid: [])
+    monkeypatch.setattr(conversation_store, "add_message", lambda *a, **k: None)
+
+    def fake_events(ws, uid, q, history=None):
+        yield {"type": "tool_call", "name": "search_documents", "args": {"query": "x"}}
+        yield {"type": "tool_result", "name": "search_documents", "summary": "2 snippet(s)"}
+        yield {"type": "final", "answer": "The answer [1]",
+               "citations": [{"index": 1, "filename": "a.pdf"}], "tool_trace": ["search_documents"]}
+
+    monkeypatch.setattr(agent_api.agent, "agent_events", fake_events)
+
+    resp = client.post("/workspaces/ws-1/agent/stream", json={"query": "compare docs"})
+    assert resp.status_code == 200
+    kinds = []
+    for line in resp.text.splitlines():
+        if line.startswith("event: "):
+            kinds.append(line[len("event: "):])
+    assert kinds[0] == "conversation"
+    assert "tool_call" in kinds
+    assert "tool_result" in kinds
+    assert "answer" in kinds
+    assert kinds[-1] == "done"
 
 
 def test_agent_endpoint(client, monkeypatch):

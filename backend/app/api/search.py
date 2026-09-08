@@ -13,4 +13,8 @@ router = APIRouter(tags=["search"])
 @router.post("/workspaces/{workspace_id}/search", response_model=SearchResponse)
 async def search(req: SearchRequest, workspace: dict = Depends(require_workspace)) -> SearchResponse:
     hits = rag.retrieve(workspace["id"], req.query, top_k=req.top_k)
-    return SearchResponse(query=req.query, results=[ChunkHit(**h) for h in hits])
+    return SearchResponse(
+        query=req.query,
+        results=[ChunkHit(**h) for h in hits],
+        confidence=rag.confidence(hits),
+    )

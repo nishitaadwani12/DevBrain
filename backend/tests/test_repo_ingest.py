@@ -53,6 +53,11 @@ def test_process_repo_success(monkeypatch, tmp_path):
         repo_ingest.vectorstore, "set_document_graph",
         lambda doc_id, graph: captured.update(graph=graph),
     )
+    monkeypatch.setattr(repo_ingest, "generate_overview", lambda name, graph, files: "## Overview")
+    monkeypatch.setattr(
+        repo_ingest.vectorstore, "set_document_overview",
+        lambda doc_id, overview: captured.update(overview=overview),
+    )
     monkeypatch.setattr(
         repo_ingest.vectorstore, "set_document_status",
         lambda doc_id, status, chunk_count=None, error=None: captured.update(

@@ -59,6 +59,7 @@ class SearchRequest(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: list[ChunkHit]
+    confidence: dict | None = None
 
 
 class ChatRequest(BaseModel):
@@ -92,3 +93,12 @@ class AgentResponse(BaseModel):
     answer: str
     citations: list[dict] = []
     tool_trace: list[str] = []
+
+
+class FollowupRequest(BaseModel):
+    question: str
+    answer: str
+
+
+class FollowupResponse(BaseModel):
+    suggestions: list[str]

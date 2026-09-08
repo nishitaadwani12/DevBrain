@@ -57,7 +57,7 @@ def _event_stream(workspace: dict, req: ChatRequest, convo: dict) -> Iterator[st
             }
             for i, h in enumerate(hits)
         ]
-        yield _sse("sources", {"citations": citations})
+        yield _sse("sources", {"citations": citations, "confidence": rag.confidence(hits)})
 
         prompt = rag.build_prompt(req.query, hits, history=history)
         answer_parts: list[str] = []

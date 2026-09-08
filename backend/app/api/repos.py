@@ -43,3 +43,11 @@ async def get_repo_graph(document_id: str, user: User = Depends(get_current_user
     if graph is None:
         raise HTTPException(404, "Graph not available (repo still processing or not a repo)")
     return graph
+
+
+@router.get("/repos/{document_id}/overview")
+async def get_repo_overview(document_id: str, user: User = Depends(get_current_user)) -> dict:
+    overview = vectorstore.get_document_overview(document_id, user.id)
+    if not overview:
+        raise HTTPException(404, "Overview not available (repo still processing or not a repo)")
+    return {"overview": overview}

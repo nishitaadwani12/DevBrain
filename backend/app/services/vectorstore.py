@@ -147,6 +147,23 @@ def set_document_graph(document_id: str, graph: dict) -> None:
         conn.commit()
 
 
+def set_document_overview(document_id: str, overview: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "update documents set overview = %s where id = %s", (overview, document_id)
+        )
+        conn.commit()
+
+
+def get_document_overview(document_id: str, user_id: str) -> str | None:
+    with get_conn() as conn:
+        r = conn.execute(
+            "select overview from documents where id = %s and user_id = %s",
+            (document_id, user_id),
+        ).fetchone()
+        return r[0] if r else None
+
+
 def get_document_graph(document_id: str, user_id: str) -> dict | None:
     with get_conn() as conn:
         r = conn.execute(

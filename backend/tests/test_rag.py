@@ -55,3 +55,23 @@ def test_build_prompt_includes_history():
     prompt = rag.build_prompt("follow up", [_hit(1)], history=history)
     assert "Conversation so far" in prompt
     assert "hello" in prompt
+
+
+def test_confidence_high_for_close_hits():
+    hits = [{"distance": 0.1}, {"distance": 0.2}, {"distance": 0.3}]
+    c = rag.confidence(hits)
+    assert c["label"] == "high"
+    assert c["grounded"] is True
+    assert 0.0 <= c["score"] <= 1.0
+
+
+def test_confidence_low_for_distant_hits():
+    hits = [{"distance": 0.7}, {"distance": 0.8}]
+    c = rag.confidence(hits)
+    assert c["label"] in ("low", "medium")
+
+
+def test_confidence_none_for_no_hits():
+    c = rag.confidence([])
+    assert c["label"] == "none"
+    assert c["grounded"] is False

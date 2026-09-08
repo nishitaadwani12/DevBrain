@@ -42,3 +42,16 @@ def test_get_repo_graph_404_when_absent(client, monkeypatch):
     monkeypatch.setattr(vectorstore, "get_document_graph", lambda doc_id, user_id: None)
     resp = client.get("/repos/repo-1/graph")
     assert resp.status_code == 404
+
+
+def test_get_repo_overview(client, monkeypatch):
+    monkeypatch.setattr(vectorstore, "get_document_overview", lambda doc_id, user_id: "## Overview\nStuff")
+    resp = client.get("/repos/repo-1/overview")
+    assert resp.status_code == 200
+    assert "Overview" in resp.json()["overview"]
+
+
+def test_get_repo_overview_404_when_absent(client, monkeypatch):
+    monkeypatch.setattr(vectorstore, "get_document_overview", lambda doc_id, user_id: None)
+    resp = client.get("/repos/repo-1/overview")
+    assert resp.status_code == 404

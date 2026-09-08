@@ -16,6 +16,23 @@ SYSTEM_INSTRUCTION = (
 )
 
 
+def confidence(hits: list[dict]) -> dict:
+    """Estimate answer groundedness from retrieval distances.
+
+    Cosine distance is in [0, 2] (0 = identical). We convert the best few hits to
+    similarities and surface a 0-1 score plus a coarse label so the UI can warn
+    when an answer is weakly grounded (a common RAG failure mode).
+    """
+    if not hits:
+        return {"score": 0.0, "label": "none", "grounded": False}
+    sims = sorted((1.0 - h.get("distance", 1.0) for h in hits), reverse=True)
+    top = sims[0]
+    avg_top = sum(sims[:3]) / len(sims[:3])
+    score = max(0.0, min(1.0, round(0.6 * top + 0.4 * avg_top, 2)))
+    label = "high" if score >= 0.72 else "medium" if score >= 0.5 else "low"
+    return {"score": score, "label": label, "grounded": score >= 0.5}
+
+
 def retrieve(workspace_id: str, query: str, top_k: int = 5) -> list[dict]:
     """Embed the query and fetch the nearest chunks within a workspace."""
     query_embedding = embed_query(query)

@@ -13,6 +13,7 @@ from app.api import (
     documents,
     repos,
     search,
+    suggestions,
     workspaces,
 )
 from app.core.config import get_settings
@@ -38,6 +39,7 @@ app.include_router(chat.router)
 app.include_router(repos.router)
 app.include_router(conversations.router)
 app.include_router(agent.router)
+app.include_router(suggestions.router)
 
 
 @app.get("/health", tags=["meta"])

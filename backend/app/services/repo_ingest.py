@@ -16,6 +16,7 @@ from app.services import vectorstore
 from app.services.code_chunking import chunk_code
 from app.services.embeddings import embed_documents
 from app.services.repo_graph import SourceFile, build_graph
+from app.services.repo_overview import generate_overview
 
 logger = logging.getLogger(__name__)
 
@@ -127,10 +128,16 @@ def process_repo(document_id: str, workspace_id: str, url: str) -> None:
 
         vectorstore.insert_chunks(document_id, workspace_id, all_chunks, embeddings)
 
-        # Build + persist the architecture graph (best-effort).
+        # Build + persist the architecture graph, then an AI overview (best-effort).
         try:
             graph = build_graph(source_files)
             vectorstore.set_document_graph(document_id, graph)
+            try:
+                overview = generate_overview(repo_name(url), graph, source_files)
+                if overview:
+                    vectorstore.set_document_overview(document_id, overview)
+            except Exception:  # noqa: BLE001
+                logger.exception("Overview generation failed for %s (non-fatal)", url)
         except Exception:  # noqa: BLE001
             logger.exception("Graph build failed for %s (non-fatal)", url)
 
